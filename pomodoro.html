@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ポモドーロタイマー</title>
+    <style>
+        :root {
+            --work-bg: #d95550;
+            --break-bg: #468b97;
+            --long-break-bg: #3a6b73;
+            --button-bg: #ffffff;
+            --text-color: #ffffff;
+            --container-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: var(--text-color);
+            transition: background-color 0.5s ease;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            padding: 40px 60px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        #status {
+            font-size: 24px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        #timer {
+            font-size: 100px;
+            font-weight: bold;
+            margin: 10px 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        #pomodoros {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        .controls button {
+            background-color: var(--button-bg);
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: 500;
+            margin: 0 8px;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+        }
+        
+        .controls button:active {
+            transform: translateY(0);
+        }
+
+        #start-pause-btn { color: var(--work-bg); }
+        #reset-btn { color: #555; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="status">集中</div>
+        <div id="timer">25:00</div>
+        <div class="controls">
+            <button id="start-pause-btn">開始</button>
+            <button id="reset-btn">リセット</button>
+        </div>
+        <div id="pomodoros">達成ポモドーロ: 0</div>
+    </div>
+
+    <script>
+        // --- 設定 ---
+        const WORK_MINS = 25;
+        const SHORT_BREAK_MINS = 5;
+        const LONG_BREAK_MINS = 15;
+        const POMODOROS_UNTIL_LONG_BREAK = 4;
+        // 通知音 (Base64エンコードされた短い音)
+        const ALARM_SOUND = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAB4cHpxb2gAE9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//uQxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4cHpxb2gAE9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//uQxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4cHpxb2gAE9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//uQxAwAABkADtnDFrgukAC+c42gL8Bi4hABHAAAABnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxAkADtnDFrgukAC+c42gL8Bi4hABHAAAACnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxAsADtnDFrgukAC+c42gL8Bi4hABHAAAADnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxBEADtnDFrgukAC+c42gL8Bi4hABHAAAAD3BwABN3eAAAJbEAAAIbABnbwP295g//3uQxBUADtnDFrgukAC+c42gL8Bi4hABHAAAAEnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxBkADtnDFrgukAC+c42gL8Bi4hABHAAAAFnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxCAADtnDFrgukAC+c42gL8Bi4hABHAAAAHnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxCQADtnDFrgukAC+c42gL8Bi4hABHAAAAInBwABN3eAAAJbEAAAIbABnbwP295g//3uQxCgADtnDFrgukAC+c42gL8Bi4hABHAAAALnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxDAADtnDFrgukAC+c42gL8Bi4hABHAAAANnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxDQADtnDFrgukAC+c42gL8Bi4hABHAAAAOnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxDsADtnDFrgukAC+c42gL8Bi4hABHAAAASnBwABN3eAAAJbEAAAIbABnbwP295g//3uQxDwADtnDFrgukAC+c42gL8Bi4hABHAAAAVHBwABN3eAAAJbEAAAIbABnbwP295g//3uQxEEADtnDFrgukAC+c42gL8Bi4hABHAAAAXHAAAAAAAAAAAAAAAAAAAAAA');
+        // --- 設定ここまで ---
+
+        const startPauseBtn = document.getElementById('start-pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const timerDisplay = document.getElementById('timer');
+        const statusDisplay = document.getElementById('status');
+        const pomodorosDisplay = document.getElementById('pomodoros');
+
+        let timerInterval = null;
+        let totalSeconds = WORK_MINS * 60;
+        let isPaused = true;
+        let mode = 'work'; // 'work', 'shortBreak', 'longBreak'
+        let pomodoroCount = 0;
+
+        function updateDisplay() {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            timerDisplay.textContent = formattedTime;
+            document.title = `${formattedTime} - ${statusDisplay.textContent}`;
+        }
+
+        function toggleTimer() {
+            isPaused = !isPaused;
+            startPauseBtn.textContent = isPaused ? '開始' : '一時停止';
+            if (!isPaused && !timerInterval) {
+                startCountdown();
+            }
+        }
+
+        function startCountdown() {
+            timerInterval = setInterval(() => {
+                if (isPaused) return;
+
+                totalSeconds--;
+                updateDisplay();
+
+                if (totalSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    ALARM_SOUND.play();
+                    switchMode();
+                }
+            }, 1000);
+        }
+
+        function switchMode() {
+            if (mode === 'work') {
+                pomodoroCount++;
+                pomodorosDisplay.textContent = `達成ポモドーロ: ${pomodoroCount}`;
+                if (pomodoroCount % POMODOROS_UNTIL_LONG_BREAK === 0) {
+                    setMode('longBreak');
+                } else {
+                    setMode('shortBreak');
+                }
+            } else {
+                setMode('work');
+            }
+            // 次のセッションを自動で開始
+            isPaused = true; // toggleTimerでfalseになるように
+            toggleTimer();
+        }
+
+        function setMode(newMode) {
+            mode = newMode;
+            isPaused = true;
+            startPauseBtn.textContent = '開始';
+
+            switch (mode) {
+                case 'work':
+                    totalSeconds = WORK_MINS * 60;
+                    statusDisplay.textContent = '集中';
+                    document.body.style.backgroundColor = 'var(--work-bg)';
+                    startPauseBtn.style.color = 'var(--work-bg)';
+                    break;
+                case 'shortBreak':
+                    totalSeconds = SHORT_BREAK_MINS * 60;
+                    statusDisplay.textContent = '短い休憩';
+                    document.body.style.backgroundColor = 'var(--break-bg)';
+                    startPauseBtn.style.color = 'var(--break-bg)';
+                    break;
+                case 'longBreak':
+                    totalSeconds = LONG_BREAK_MINS * 60;
+                    statusDisplay.textContent = '長い休憩';
+                    document.body.style.backgroundColor = 'var(--long-break-bg)';
+                    startPauseBtn.style.color = 'var(--long-break-bg)';
+                    break;
+            }
+            updateDisplay();
+        }
+
+        function reset() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            if (confirm('タイマーとポモドーロカウントをリセットしますか？')) {
+                pomodoroCount = 0;
+                pomodorosDisplay.textContent = `達成ポモドーロ: 0`;
+                setMode('work');
+            } else {
+                // キャンセルされた場合、現在のモードでタイマーを再開できるようにする
+                if (!isPaused) {
+                    startCountdown();
+                }
+            }
+        }
+        
+        // イベントリスナー
+        startPauseBtn.addEventListener('click', toggleTimer);
+        resetBtn.addEventListener('click', reset);
+
+        // 初期化
+        setMode('work');
+    </script>
+
+</body>
+</html>
